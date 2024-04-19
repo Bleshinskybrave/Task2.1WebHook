@@ -1,0 +1,83 @@
+// Include necessary libraries
+#include "secrets.h"
+#include "WiFiNINA.h"
+#include "secrets.h"
+#include "ThingSpeak.h"
+#include "DHT.h"
+
+// Define WiFi and ThingSpeak parameters
+char ssid[] = Bravo;   // your network SSID (name)
+char pass[] = x;   // your network password
+int keyIndex = 0;            // your network key index number (needed only for WEP)
+WiFiClient client;
+
+unsigned long myChannelNumber = 2515178;
+const char *myWriteAPIKey = CHD91F42ZFW84Q5P;
+
+// DHT sensor settings
+#define DHTPIN 2  // DHT sensor connected to pin 2
+#define DHTTYPE DHT11  // DHT11 sensor type
+
+DHT dht(DHTPIN, DHTTYPE);  // Create an instance of the DHT sensor
+
+void setup() {
+    Serial.begin(115200);  // Initialize serial communication
+    while (!Serial) {
+        ;  // Wait for the serial port to connect
+    }
+
+    // Initialize the DHT sensor
+    dht.begin();
+    
+    // Initialize ThingSpeak
+    ThingSpeak.begin(client);
+}
+
+void loop() {
+    // Connect or reconnect to WiFi
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.print("Attempting to connect to SSID: ");
+        Serial.println(SECRET_SSID);
+        while (WiFi.status() != WL_CONNECTED) {
+            WiFi.begin(ssid, pass);
+            Serial.print(".");
+            delay(5000);
+        }
+        Serial.println("\nConnected.");
+    }
+
+    // Measure humidity and temperature from the DHT11 sensor
+    float humidity = dht.readHumidity();
+    float temperatureC = dht.readTemperature();  // Temperature in Celsius
+    float temperatureF = dht.readTemperature(true);  // Temperature in Fahrenheit
+
+    // Check if sensor reading failed
+    if (isnan(humidity) || isnan(temperatureC) || isnan(temperatureF)) {
+        Serial.println("Failed to read from DHT sensor!");
+        return;
+    }
+
+    // Set the ThingSpeak fields with sensor data
+    ThingSpeak.setField(1, humidity);  // Humidity
+    ThingSpeak.setField(2, temperatureC);  // Temperature in Celsius
+    ThingSpeak.setField(3, temperatureF);  // Temperature in Fahrenheit
+
+    // Compute heat index in Celsius and Fahrenheit
+    float heatIndexC = dht.computeHeatIndex(temperatureC, humidity, false);
+    float heatIndexF = dht.computeHeatIndex(temperatureF, humidity);
+
+    // Set the remaining fields
+    ThingSpeak.setField(4, heatIndexC);  // Heat index in Celsius
+    ThingSpeak.setField(5, heat indexF);  // Heat index in Fahrenheit
+
+    // Send data to ThingSpeak
+    int responseCode = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
+    if (responseCode == 200) {
+        Serial.println("Channel update successful.");
+    } else {
+        Serial.println("Problem updating channel. HTTP error code: " + String(responseCode));
+    }
+
+    // Wait for 20 seconds before the next update
+    delay(20000);
+}
